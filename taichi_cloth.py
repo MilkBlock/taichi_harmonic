@@ -9,6 +9,7 @@ damping = 2 # 这个模型并没有考虑非相邻块布料与布料之间的力
 dt = 5e-4
 
 block_radius = 0.22
+block_cell_size = 0.22*2/(cube_N-1)
 block_center = ti.Vector.field(3, ti.f32, (1,))
 
 x = ti.Vector.field(3, ti.f32, (N, N))
@@ -17,10 +18,11 @@ v = ti.Vector.field(3, ti.f32, (N, N))
 num_triangles = (N - 1) * (N - 1) * 2
 indices = ti.field(int, num_triangles * 3)
 vertices = ti.Vector.field(3, ti.f32, N * N)
-cube_head_vertices = ti.Vector.field(3, ti.f32, 8)
 cube_vertices = ti.Vector.field(3, ti.f32, 6*cube_N*cube_N)
 cube_indices = ti.field(int, 6*(cube_N-1)**2*2*3)
 
+import itertools as it
+@ti.kernel
 def init_scene():
     print("init started")
     for i, j in ti.ndrange(N, N):
@@ -30,56 +32,57 @@ def init_scene():
         x[i,j] += ti.Vector([0,1,0])
         # x[i,j] = ti.Vector([i*cell_size,  0., j*cell_size])
     block_center[0] = ti.Vector([0.5, -0.5, -0.0])
-    for k,v in ti.static(enumerate([[1,1,1],[1,1,-1],[1,-1,-1],[-1,-1,-1],[-1,1,-1],[-1,1,1],[-1,-1,1],[1,-1,1]])):
-        cube_head_vertices[k] = ti.Vector([block_center[0][i]+v[i]*block_radius for i in range(3)])
-        # print([block_center[0][i]+v[i]*block_radius for i in range(3)])
-    import itertools as it
-    for n,c in ti.static(enumerate(it.combinations([cube_head_vertices[i] for i in range(0,8,2)],r=2))):
-        # print(c)
-        # print("n : ",n)
-        v1,v2 = c[0],c[1]
-        dv = (v2 - v1)/(cube_N-1)
-        if dv[0] == 0:
-            # print("0")
-            for i,j in ti.ndrange(cube_N,cube_N):
-                # print(i,j)
-                cube_vertices[n*cube_N**2+i*cube_N+j] = ti.Vector([v1[r]+(0,i,j)[r]*dv[r] for r in range(3)])
-        if dv[1] == 0:
-            # print("1")
-            for i,j in ti.ndrange(cube_N,cube_N):
-                cube_vertices[n*cube_N**2+i*cube_N+j] = ti.Vector([v1[r]+(i,0,j)[r]*dv[r] for r in range(3)])
-        if dv[2] == 0:
-            # print("2")
-            for i,j in ti.ndrange(cube_N,cube_N):
-                cube_vertices[n*cube_N**2+i*cube_N+j] = ti.Vector([v1[r]+(i,j,0)[r]*dv[r] for r in range(3)])
+    for i,j in ti.ndrange(cube_N,cube_N):
+        cube_vertices[0*(cube_N)*(cube_N)+i*(cube_N)+j] = ti.Vector([i*block_cell_size,j*block_cell_size,0*block_cell_size])       
+    for i,j in ti.ndrange(cube_N,cube_N):
+        cube_vertices[1*(cube_N)*(cube_N)+i*(cube_N)+j] = ti.Vector([i*block_cell_size,j*block_cell_size,(cube_N-1)*block_cell_size])    
+    # 和x z 平面
+    for i,j in ti.ndrange(cube_N,cube_N):
+        cube_vertices[2*(cube_N)*(cube_N)+i*(cube_N)+j] = ti.Vector([i*block_cell_size,0*block_cell_size,j*block_cell_size])       
+    for i,j in ti.ndrange(cube_N,cube_N):
+        cube_vertices[3*(cube_N)*(cube_N)+i*(cube_N)+j] = ti.Vector([i*block_cell_size,(cube_N-1)*block_cell_size,j*block_cell_size])       
+    # y  z 
+    for i,j in ti.ndrange(cube_N,cube_N):
+        cube_vertices[4*(cube_N)*(cube_N)+i*(cube_N)+j] = ti.Vector([0*block_cell_size,i*block_cell_size,j*block_cell_size])       
+    for i,j in ti.ndrange(cube_N,cube_N):
+        cube_vertices[5*(cube_N)*(cube_N)+i*(cube_N)+j] = ti.Vector([(cube_N-1)*block_cell_size,i*block_cell_size,j*block_cell_size])       
+    
+    for i,j,k in ti.ndrange(cube_N,cube_N,(0,6)):
+        cube_vertices[k*(cube_N)*(cube_N)+i*(cube_N)+j] = cube_vertices[k*(cube_N)*(cube_N)+i*(cube_N)+j] - ti.Vector([block_radius,block_radius,block_radius])+ block_center[0]
+
     print("init ended")
             
-
 @ti.kernel
 def set_indices():
-    for i, j in ti.ndrange(N, N):
-        if i < N - 1 and j < N - 1:
-            square_id = (i * (N - 1)) + j
-            # 1st triangle of the square
-            indices[square_id * 6 + 0] = i * N + j
-            indices[square_id * 6 + 1] = (i + 1) * N + j
-            indices[square_id * 6 + 2] = i * N + (j + 1)
-            # 2nd triangle of the square
-            indices[square_id * 6 + 3] = (i + 1) * N + j + 1
-            indices[square_id * 6 + 4] = i * N + (j + 1)
-            indices[square_id * 6 + 5] = (i + 1) * N + j
-    for n in ti.static(range(6)):
-        for i, j in ti.ndrange(cube_N, cube_N):
-            if i < cube_N - 1 and j < cube_N - 1:
-                square_id = (i * (cube_N - 1)) + j
-                # 1st triangle of the square
-                cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 0)] = n*(cube_N)**2 +i * cube_N + j
-                cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 1)] = n*(cube_N)**2 +(i + 1) * cube_N + j
-                cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 2)] = n*(cube_N)**2 +i * cube_N + (j + 1)
-                # 2nd triangln*be_N*(c-1ube_N)**2the square
-                cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 3)] = n*(cube_N)**2 +(i + 1) * cube_N + j + 1
-                cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 4)] = n*(cube_N)**2 +i * cube_N + (j + 1)
-                cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 5)] = n*(cube_N)**2 +(i + 1) * cube_N + j
+    for i, j in ti.ndrange(N-1, N-1):
+        square_id = (i * (N - 1)) + j
+        # 1st triangle of the square
+        indices[square_id * 6 + 0] = i * N + j
+        indices[square_id * 6 + 1] = (i + 1) * N + j
+        indices[square_id * 6 + 2] = i * N + (j + 1)
+        # 2nd triangle of the square
+        indices[square_id * 6 + 3] = (i + 1) * N + j + 1
+        indices[square_id * 6 + 4] = i * N + (j + 1)
+        indices[square_id * 6 + 5] = (i + 1) * N + j
+    for n, i, j in ti.ndrange((0,6),cube_N-1, cube_N-1):
+        square_id = (i * (cube_N - 1)) + j
+        # # 1st triangle of the square
+        # cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 0)] = n*(cube_N)**2 +i * cube_N + j
+        # cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 1)] = n*(cube_N)**2 +(i + 1) * cube_N + j
+        # cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 2)] = n*(cube_N)**2 +i * cube_N + (j + 1)
+        # # 2nd triangln*be_N*(c-1ube_N)**2the square
+        # cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 3)] = n*(cube_N)**2 +(i + 1) * cube_N + j + 1
+        # cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 4)] = n*(cube_N)**2 +i * cube_N + (j + 1)
+        # cube_indices[n*(cube_N-1)**2*6+(square_id * 6 + 5)] = n*(cube_N)**2 +(i + 1) * cube_N + j
+
+        
+        cube_indices[n*((cube_N-1)**2*6)+square_id*6+0] = n*(cube_N)**2+i*(cube_N)+j
+        cube_indices[n*((cube_N-1)**2*6)+square_id*6+1] = n*(cube_N)**2+(i+1)*(cube_N)+j
+        cube_indices[n*((cube_N-1)**2*6)+square_id*6+2] = n*(cube_N)**2+i*(cube_N)+j+1
+        cube_indices[n*((cube_N-1)**2*6)+square_id*6+3] = n*(cube_N)**2+(i+1)*(cube_N)+j+1
+        cube_indices[n*((cube_N-1)**2*6)+square_id*6+4] = n*(cube_N)**2+i*(cube_N)+j+1
+        cube_indices[n*((cube_N-1)**2*6)+square_id*6+5] = n*(cube_N)**2+(i+1)*(cube_N)+j
+
 
 links = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]
 links = [ti.Vector(v) for v in links]
@@ -167,8 +170,13 @@ while window.running :
     scene.set_camera(camera)
     scene.point_light(pos=(0.5, 1, 2), color=(1, 1, 1))
     scene.mesh(cube_vertices, indices=cube_indices, per_vertex_color=c_color, two_sided = True)
+    # scene.mesh(cube_vertices, indices=cube_indices, two_sided = True)
+    # scene.particles(cube_vertices,radius=0.01)
     scene.mesh(vertices, indices=indices, per_vertex_color=v_color, two_sided = True)
-    # scene.mesh(vertices, indices=indices, color=(1,1,1), two_sided = True)
-    # scene.particles(block_center, radius=block_radius, color=(0.5, 0, 0))  # ? particles 居然不需要自己手动模拟
+   
+   
+
+ 
+    # scene.particles(cube_vertices, radius=0.01, color=(0.5, 0, 0))  # ? particles 居然不需要自己手动模拟
     canvas.scene(scene)
     window.show()
