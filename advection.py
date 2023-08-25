@@ -2,8 +2,8 @@ import taichi as ti
 
 ti.init(arch=ti.gpu)
 
-use_mc = True
-mc_clipping = True
+use_mc = True   # 修正，但他修正的是上一帧到下一帧的预测位置
+mc_clipping = False   # 修正 ，选取保守的速度
 pause = False
 
 # Runge-Kutta order
@@ -13,12 +13,11 @@ n = 512
 x = ti.field(ti.f32, shape=(n, n))
 new_x = ti.field(ti.f32, shape=(n, n))
 new_x_aux = ti.field(ti.f32, shape=(n, n))
-dx = 1 / n
+dx = 1 / n   #  以 1为整个平面的宽度而计算的每个格点的宽度大小
 inv_dx = 1 / dx
 dt = 0.05
 
-stagger = ti.Vector([0.5, 0.5])
-
+stagger = ti.Vector([0.5, 0.5])   # stagger 格点的宽度       
 
 @ti.func
 def Vector2(x, y):
@@ -27,7 +26,7 @@ def Vector2(x, y):
 
 @ti.func
 def inside(p, c, r):
-    return (p - c).norm_sqr() <= r * r
+    return (p - c).norm_sqr() <= r * r   # 计算出 p点是否在以 c为圆心r为半径的圆中
 
 @ti.func
 def inside_taichi(p):
@@ -76,20 +75,20 @@ def vec(x, y):
     return ti.Vector([x, y])
 
 @ti.func
-def clamp(p):
+def clamp(p):  # 其中p点事理想平面中的一个点
     for d in ti.static(range(p.n)):
         p[d] = min(1 - 1e-4 - dx + stagger[d] * dx, max(p[d], stagger[d] * dx))
     return p
 
 @ti.func
-def sample_bilinear(x, p):
+def sample_bilinear(x, p):  # 其中 p点是 理想平面中的一个点
     p = clamp(p)
 
     p_grid = p * inv_dx - stagger
 
-    I = ti.cast(ti.floor(p_grid), ti.i32)
+    I = ti.cast(ti.floor(p_grid), ti.i32)   # I 最后求出来是个二维整数向量
     f = p_grid - I
-    g = 1 - f
+    g = 1 - f    #   (1,1)
 
     return x[I] * (g[0] * g[1]) + x[I + vec(1, 0)] * (
         f[0] * g[1]) + x[I + vec(0, 1)] * (
@@ -112,7 +111,7 @@ def sample_max(x, p):
     return max(x[I],  x[I + vec(1, 0)], x[I + vec(0, 1)], x[I + vec(1, 1)])
 
 @ti.func
-def backtrace(I, dt):
+def backtrace(I, dt):   # 在理想平面中上一帧的位置
     p = (I + stagger) * dx
     if ti.static(rk == 1):
         p -= dt * velocity(p)
@@ -145,7 +144,9 @@ def maccormack(x, dt):
     semi_lagrangian(new_x, new_x_aux, -dt)
     
     for I in ti.grouped(x):
+        # error = x[I] - new_x_aux[I]
         new_x[I] = new_x[I] + 0.5 * (x[I] - new_x_aux[I])
+        # 这里是用 误差的 0.5 和上一帧的x进行叠加以进行补偿  compensation 
         
         if ti.static(mc_clipping):
             source_pos = backtrace(I, dt)

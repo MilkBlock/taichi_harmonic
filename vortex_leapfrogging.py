@@ -4,24 +4,24 @@ import math
 
 ti.init(arch=ti.gpu)
 
-eps = 0.01
-dt = 0.1
+eps = 0.01  #   
+dt = 0.1  # 两帧之间的时间差
 
-n_vortex = 4
-n_tracer = 200000
+n_vortex = 4   # 涡流的数量
+n_tracer = 200000  # 
 
-pos = ti.Vector(2, ti.f32, shape=n_vortex)
-new_pos = ti.Vector(2, ti.f32, shape=n_vortex)
-vort = ti.var(ti.f32, shape=n_vortex)
-
-tracer = ti.Vector(2, ti.f32, shape=n_tracer)
+pos = ti.Vector.field(2, ti.f32, shape=n_vortex)   # 这是一个二维向量数组
+new_pos = ti.Vector.field(2, ti.f32, shape=n_vortex)# 这是一个二维向量数组
+vort = ti.field(ti.f32, shape=n_vortex) # 涡流的旋转速度
+tracer = ti.Vector.field(2, ti.f32, shape=n_tracer)  # 每一个元素由两个float组成 
 
 
 @ti.func
 def compute_u_single(p, i):
-    r2 = (p - pos[i]).norm()**2
-    uv = ti.Vector([pos[i].y - p.y, p.x - pos[i].x])
-    return vort[i] * uv / (r2 * math.pi) * 0.5 * (1.0 - ti.exp(-r2 / eps**2))
+    r2 = (p - pos[i]).norm_sqr()
+    uv = ti.Vector([pos[i].y - p.y, p.x - pos[i].x])  # 这个vector 和 p-pos[i] 垂直,这是切线方向
+    return vort[i] * uv / (r2 * math.pi) * 0.5 #* (1.0 - ti.exp(-r2 / eps**2))
+# uv 的长度就是 r  ，
 
 
 @ti.func
@@ -45,9 +45,9 @@ def integrate_vortex():
         pos[i] = new_pos[i]
 
 
-@ti.kernel
+@ti.kernel  # 通过taichi 进行gpu 加速
 def advect():
-    for i in range(n_tracer):
+    for i in range(n_tracer):   # tracer的遍历
         # Ralston's third-order method
         p = tracer[i]
         v1 = compute_u_full(p)
@@ -69,7 +69,7 @@ vort[3] = -1
 @ti.kernel
 def init_tracers():
     for i in range(n_tracer):
-        tracer[i] = [ti.random() - 0.5, ti.random() * 3 - 1.5]
+        tracer[i] = [ti.random() - 0.5, ti.random() * 3 - 1.5]   # 以 (0,0)为半径为1中心的分布
 
 
 init_tracers()
@@ -78,12 +78,12 @@ gui = ti.GUI("Vortex", (1024, 512), background_color=0xFFFFFF)
 
 for T in range(1000):
     for i in range(4):  # substeps
-        advect()
-        integrate_vortex()
+        advect()     # advect 就是简单的平流输送
+        integrate_vortex()  # 集成 涡流
 
-    gui.circles(
+    gui.circles(   
         tracer.to_numpy() * np.array([[0.05, 0.1]]) + np.array([[0.0, 0.5]]),
-        radius=0.5,
+        radius=0.5, 
         color=0x0)
-
+    # 这里在画固定半径的圆
     gui.show()
