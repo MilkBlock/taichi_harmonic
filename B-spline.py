@@ -2,7 +2,7 @@ import taichi as ti
 ti.init(debug=True)
 k = 4
 N = 1024
-p_list = [[0.1,0.3],[0.5,0.5],[0.6,0.2],[0.1,0.1],[1,1]]
+p_list = [[0.1,0.1],[0.2,0.5],[0.3,0.7],[0.4,0.5],[0.5,0.1],[0,0]]
 n = len(p_list)
 dx = (n+1-k+1)/N 
 # particles = ti.Vector.field(2,float,N)
@@ -14,7 +14,6 @@ def B_spline():
 	绘制三次(四阶)均匀B样条曲线
 	"""
 	result = []
-	n = len(p_list)
 	u = k-1
 	while (u < n+1):
 		x, y = 0, 0
@@ -55,9 +54,7 @@ def draw():
         # particles[i] = np.array(v)
         # print(particles[i])
     
-for T in range(1000):
-    mouse = gui.get_cursor_pos()
-    print(mouse)
+for T in range(1000000):
     draw()
 
     gui.circles(   
@@ -72,3 +69,9 @@ for T in range(1000):
         )
     # 这里在画固定半径的圆
     gui.show()
+    mouse = gui.get_cursor_pos()
+
+
+# 如果只想要使用taichi的绘图功能的话那么一般是不需要使用taichi的gpu计算使用字段
+# 直接使用numpy 更加划算一点
+# 注意二维渲染gui的坐标系是以左下角为(0,0)，并且整个窗体的右上角被视作 (1,1)

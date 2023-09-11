@@ -3,7 +3,7 @@ import taichi as ti
 ti.init(arch=ti.gpu)
 
 use_mc = True   # 修正，但他修正的是上一帧到下一帧的预测位置
-mc_clipping = False   # 修正 ，选取保守的速度
+mc_clipping = True   # 修正 ，选取保守的速度
 pause = False
 
 # Runge-Kutta order
@@ -158,8 +158,8 @@ def maccormack(x, dt):
         
 
 @ti.kernel
-def advect():
-    if ti.static(use_mc):
+def advect():  # 平流输送
+    if ti.static(use_mc):  # 用了 maccomack 
         maccormack(x, dt)
     else:
         semi_lagrangian(x, new_x, dt)
@@ -171,7 +171,7 @@ def advect():
 paint()
 
 gui = ti.GUI('Advection schemes', (512, 512))
-
+t = 0.2 
 while True:
     while gui.get_event(ti.GUI.PRESS):
         if gui.event.key in [ti.GUI.ESCAPE, ti.GUI.EXIT]: exit(0)

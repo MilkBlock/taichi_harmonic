@@ -130,6 +130,8 @@ if img.mode!="RGB":
 v_color:ti.MatrixField= ti.Vector.field(3,ti.f32,shape=(N*N))
 color = asarray(img,dtype=np.float32)
 assert color.shape==(N,N,3)
+for i,j,k in color.shape:
+    print(i,j)
 # color = np.transpose(color,(1,0,2))
 color = np.rot90(color,3,axes=(0,1))
 color = color.reshape((-1,3))/255.0
@@ -173,10 +175,6 @@ while window.running :
     # scene.mesh(cube_vertices, indices=cube_indices, two_sided = True)
     # scene.particles(cube_vertices,radius=0.01)
     scene.mesh(vertices, indices=indices, per_vertex_color=v_color, two_sided = True)
-   
-   
-
- 
     # scene.particles(cube_vertices, radius=0.01, color=(0.5, 0, 0))  # ? particles 居然不需要自己手动模拟
     canvas.scene(scene)
     window.show()

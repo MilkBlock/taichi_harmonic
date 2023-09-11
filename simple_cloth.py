@@ -10,7 +10,7 @@ cloth_indices = ti.field(int,(cloth_N-1)**2*6)
 cloth_cell_size = 5/cloth_N
 
 cloth_v = ti.Vector.field(3,ti.f32,cloth_N*cloth_N)
-gravity = 5
+gravity = 9
 delta_time = 0.016
 
 cell_size = 3/N
